@@ -237,6 +237,11 @@ MODULE MOD_Vars_TimeInvariants
    real(r8), allocatable :: chi_twi        (:)  !chi   in three parameter gamma distribution of twi
    real(r8), allocatable :: mu_twi         (:)  !mu    in three parameter gamma distribution of twi
 
+   real(r8), allocatable :: ths_rcc        (:)  ! porosity in recession curve, dimensionless, [0-1]
+   real(r8), allocatable :: df_rcc         (:)  ! decay factor in recession curve, [(m/s)^ep * 1/m]
+   real(r8), allocatable :: ep_rcc         (:)  ! exponent in recession curve, dimensionless
+   real(r8), allocatable :: qmax_rcc       (:)  ! maximum baseflow in recession curve, [m/s]
+
    real(r8), allocatable :: vic_b_infilt   (:)
    real(r8), allocatable :: vic_Dsmax      (:)
    real(r8), allocatable :: vic_Ds         (:)
@@ -372,6 +377,11 @@ CONTAINS
             allocate (alp_twi              (numpatch))
             allocate (chi_twi              (numpatch))
             allocate (mu_twi               (numpatch))
+
+            allocate (ths_rcc              (numpatch))
+            allocate (df_rcc               (numpatch))
+            allocate (ep_rcc               (numpatch))
+            allocate (qmax_rcc             (numpatch))
 
             allocate (vic_b_infilt         (numpatch))
             allocate (vic_Dsmax            (numpatch))
@@ -520,6 +530,13 @@ CONTAINS
          CALL ncio_read_vector (file_restart, 'mu_twi  ', landpatch, mu_twi  , defval = 6.95 )
       ENDIF
 
+      IF (DEF_USE_RecessionCurve) THEN
+         CALL ncio_read_vector (file_restart, 'ths_rcc ', landpatch, ths_rcc , defval = 0.5    )
+         CALL ncio_read_vector (file_restart, 'df_rcc  ', landpatch, df_rcc  , defval = 5.     )
+         CALL ncio_read_vector (file_restart, 'ep_rcc  ', landpatch, ep_rcc  , defval = 0.     )
+         CALL ncio_read_vector (file_restart, 'qmax_rcc', landpatch, qmax_rcc, defval = 5.5e-6 )
+      ENDIF
+
       CALL ncio_read_vector (file_restart, 'vic_b_infilt', landpatch, vic_b_infilt)
       CALL ncio_read_vector (file_restart, 'vic_Dsmax'   , landpatch, vic_Dsmax   )
       CALL ncio_read_vector (file_restart, 'vic_Ds'      , landpatch, vic_Ds      )
@@ -626,7 +643,7 @@ CONTAINS
    ! Original version: Yongjiu Dai, September 15, 1999, 03/2014
    !====================================================================
 
-   USE MOD_Namelist, only: DEF_REST_CompressLevel, DEF_USE_BEDROCK
+   USE MOD_Namelist, only: DEF_REST_CompressLevel, DEF_USE_BEDROCK, DEF_USE_RecessionCurve
    USE MOD_SPMD_Task
    USE MOD_NetCDFSerial
    USE MOD_NetCDFVector
@@ -730,6 +747,13 @@ CONTAINS
          CALL ncio_write_vector (file_restart, 'mu_twi  ', 'patch', landpatch, mu_twi  )
       ENDIF
 
+      IF (DEF_USE_RecessionCurve) THEN
+         CALL ncio_write_vector (file_restart, 'ths_rcc ', 'patch', landpatch, ths_rcc )
+         CALL ncio_write_vector (file_restart, 'df_rcc  ', 'patch', landpatch, df_rcc  )
+         CALL ncio_write_vector (file_restart, 'ep_rcc  ', 'patch', landpatch, ep_rcc  )
+         CALL ncio_write_vector (file_restart, 'qmax_rcc', 'patch', landpatch, qmax_rcc)
+      ENDIF
+
       CALL ncio_write_vector (file_restart, 'vic_b_infilt', 'patch', landpatch, vic_b_infilt)
       CALL ncio_write_vector (file_restart, 'vic_Dsmax'   , 'patch', landpatch, vic_Dsmax   )
       CALL ncio_write_vector (file_restart, 'vic_Ds'      , 'patch', landpatch, vic_Ds      )
@@ -774,7 +798,7 @@ CONTAINS
          CALL ncio_write_vector (file_restart, 'cur_patches', 'patch', landpatch, cur_patches)
          CALL ncio_write_vector (file_restart, 'slp_type_patches',  'type_a', num_aspect_type, 'patch', landpatch, slp_type_patches)
          CALL ncio_write_vector (file_restart, 'asp_type_patches',  'type_a', num_aspect_type, 'patch', landpatch, asp_type_patches)
-      ENDIF   
+      ENDIF
 
 
 #ifdef USEMPI
@@ -899,6 +923,11 @@ CONTAINS
             deallocate (chi_twi        )
             deallocate (mu_twi         )
 
+            deallocate (ths_rcc        )
+            deallocate (df_rcc         )
+            deallocate (ep_rcc         )
+            deallocate (qmax_rcc       )
+
             deallocate (vic_b_infilt   )
             deallocate (vic_Dsmax      )
             deallocate (vic_Ds         )
@@ -965,7 +994,8 @@ CONTAINS
    USE MOD_SPMD_Task
    USE MOD_RangeCheck
    USE MOD_Namelist, only: DEF_Runoff_SCHEME, DEF_TOPMOD_method, DEF_USE_BEDROCK, &
-                           DEF_USE_Forcing_Downscaling, DEF_USE_Forcing_Downscaling_Simple
+                           DEF_USE_Forcing_Downscaling, DEF_USE_Forcing_Downscaling_Simple, &
+                           DEF_USE_RecessionCurve
 
    IMPLICIT NONE
 
@@ -1006,7 +1036,7 @@ CONTAINS
       CALL check_vector_data ('bsw          [-]     ', bsw         ) ! clapp and hornberger "b" parameter [-]
 #ifdef vanGenuchten_Mualem_SOIL_MODEL
       CALL check_vector_data ('theta_r      [m3/m3] ', theta_r     ) ! residual moisture content [-]
-      CALL check_vector_data ('alpha_vgm    [-]     ', alpha_vgm   ) ! a parameter corresponding approximately to the inverse of the air-entry value
+      CALL check_vector_data ('alpha_vgm    [1/mm]  ', alpha_vgm   ) ! a parameter corresponding approximately to the inverse of the air-entry value
       CALL check_vector_data ('L_vgm        [-]     ', L_vgm       ) ! pore-connectivity parameter [dimensionless]
       CALL check_vector_data ('n_vgm        [-]     ', n_vgm       ) ! a shape parameter [dimensionless]
       CALL check_vector_data ('sc_vgm       [-]     ', sc_vgm      ) ! saturation at the air entry value in the classical vanGenuchten model [-]
@@ -1024,6 +1054,13 @@ CONTAINS
          CALL check_vector_data ('twi alpha in 3-gamma ', alp_twi )
          CALL check_vector_data ('twi chi   in 3-gamma ', chi_twi )
          CALL check_vector_data ('twi mu    in 3-gamma ', mu_twi  )
+      ENDIF
+
+      IF (DEF_USE_RecessionCurve) THEN
+         CALL check_vector_data ('porosity in rcc [-]  ', ths_rcc,  spval)
+         CALL check_vector_data ('decayfac [(m/s)^ep*m]', df_rcc,   spval)
+         CALL check_vector_data ('exponent in rcc [-]  ', ep_rcc,   spval)
+         CALL check_vector_data ('qmax in rcc  [m/s]   ', qmax_rcc, spval)
       ENDIF
 
       CALL check_vector_data ('hksati       [mm/s]  ', hksati      ) ! hydraulic conductivity at saturation [mm h2o/s]

@@ -13,6 +13,7 @@ MODULE MOD_Runoff
    PUBLIC :: Runoff_XinAnJiang
    PUBLIC :: Runoff_SimpleVIC
    PUBLIC :: SubsurfaceRunoff_SimpleVIC
+   PUBLIC :: BaseflowRecessionCurve
 
 
 !-----------------------------------------------------------------------
@@ -435,6 +436,73 @@ CONTAINS
       ENDIF
 
    END SUBROUTINE SubsurfaceRunoff_SimpleVIC
+
+! -------------------------------------------------------------------------
+   SUBROUTINE BaseflowRecessionCurve (nl_soil, icefrac, dz_soisno, zi_soisno, &
+         ths_rcc, df_rcc, ep_rcc, qmax_rcc, zwt, rsubst)
+
+   USE MOD_Namelist, only: DEF_TOPMOD_method
+   IMPLICIT NONE
+
+!-------------------------- Dummy Arguments ----------------------------
+   integer,  intent(in) :: nl_soil                 !
+   real(r8), intent(in) :: icefrac(1:nl_soil)      ! ice fraction (-)
+
+   real(r8), intent(in) :: dz_soisno  (1:nl_soil)  ! layer depth (m)
+   real(r8), intent(in) :: zi_soisno  (0:nl_soil)  ! interface level below a "z" level (m)
+
+   real(r8), intent(in) :: ths_rcc   ! porosity in recession curve, dimensionless, [0-1]
+   real(r8), intent(in) :: df_rcc    ! decay factor in recession curve, [(m/s)^ep * 1/m]
+   real(r8), intent(in) :: ep_rcc    ! exponent in recession curve, dimensionless
+   real(r8), intent(in) :: qmax_rcc  ! maximum baseflow in recession curve, [m/s]
+
+   real(r8), intent(in)  :: zwt    ! the depth from ground (soil) surface to water table [m]
+   real(r8), intent(out) :: rsubst ! subsurface runoff (positive = out of soil column) (mm H2O /s)
+
+!-------------------------- Local Variables ----------------------------
+   integer  :: j                ! indices
+   integer  :: jwt              ! index of the soil layer right above the water table (-)
+   real(r8) :: dzmm(1:nl_soil)  ! layer thickness (mm)
+
+   real(r8) :: dzsum
+   real(r8) :: icefracsum
+   real(r8) :: fracice_rsub
+   real(r8) :: imped
+!-----------------------------------------------------------------------
+
+      DO j = 1,nl_soil
+         dzmm(j) = dz_soisno(j)*1000.
+      ENDDO
+
+      jwt = nl_soil
+      ! allow jwt to equal zero when zwt is in top layer
+      DO j = 1, nl_soil
+         IF(zwt <= zi_soisno(j)) THEN
+            jwt = j-1
+            EXIT
+         ENDIF
+      ENDDO
+
+      !-- Topographic runoff  --
+      dzsum = 0.
+      icefracsum = 0.
+      DO j = max(jwt,1), nl_soil
+         dzsum = dzsum + dzmm(j)
+         icefracsum = icefracsum + icefrac(j) * dzmm(j)
+      ENDDO
+      ! add ice impedance factor to baseflow
+      fracice_rsub = max(0.,exp(-3.*(1.-(icefracsum/dzsum)))-exp(-3.))/(1.0-exp(-3.))
+      imped = max(0.,1.-fracice_rsub)
+
+      IF (ep_rcc == 0) THEN
+         rsubst = imped * qmax_rcc * exp(- df_rcc * ths_rcc * zwt)
+      ELSE
+         rsubst = imped * (max(-df_rcc * ths_rcc * zwt * ep_rcc + qmax_rcc**ep_rcc, 0.))**(1./ep_rcc)
+      ENDIF
+
+      rsubst = rsubst * 1.e3  ! m/s to mm/s
+
+   END SUBROUTINE BaseflowRecessionCurve
 
 END MODULE MOD_Runoff
 ! ---------- EOP ------------

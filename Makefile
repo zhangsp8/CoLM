@@ -49,6 +49,7 @@ OBJS_SHARED =    \
 				  MOD_NetCDFVector.o           \
 				  MOD_RangeCheck.o             \
 				  MOD_SpatialMapping.o         \
+				  MOD_VectorMapWrite.o         \
 				  MOD_WorkerPushData.o         \
 				  MOD_AggregationRequestData.o \
 				  MOD_PixelsetShared.o         \
@@ -88,6 +89,7 @@ OBJS_MKSRFDATA = \
 				  Aggregation_TopographyFactors_Simple.o \
 				  Aggregation_Urban.o               \
 				  Aggregation_SoilTexture.o         \
+				  Aggregation_RecessionCurves.o     \
 				  MOD_Lulcc_TransferTrace.o         \
 				  MKSRFDATA.o
 
@@ -333,6 +335,7 @@ OBJS_MAIN = \
 				MOD_Grid_RiverLakeHist.o                  \
 				MOD_Hist.o                                \
 				MOD_CheckEquilibrium.o                    \
+				MOD_SpinupSpeedup.o                       \
 				MOD_LightningData.o                       \
 				MOD_CaMa_colmCaMa.o                       \
 				MOD_Catch_LateralFlow.o                   \

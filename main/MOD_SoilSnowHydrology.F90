@@ -8,7 +8,7 @@ MODULE MOD_SoilSnowHydrology
                            DEF_URBAN_RUN,           DEF_USE_IRRIGATION,    &
                            DEF_SPLIT_SOILSNOW,      DEF_Runoff_SCHEME,     &
                            DEF_DA_TWS_GRACE,        DEF_Optimize_Baseflow, &
-                           DEF_USE_Dynamic_Wetland
+                           DEF_USE_Dynamic_Wetland, DEF_USE_RecessionCurve
 #if (defined CaMa_Flood)
    USE YOS_CMF_INPUT,      only: LWINFILT
 #endif
@@ -543,7 +543,8 @@ ENDIF
    USE MOD_Hydro_SoilWater
    USE MOD_Vars_TimeInvariants, only: wetwatmax
    USE MOD_Const_Physical,      only: denice, denh2o, tfrz
-   USE MOD_Vars_TimeInvariants, only: vic_b_infilt, vic_Dsmax, vic_Ds, vic_Ws, vic_c
+   USE MOD_Vars_TimeInvariants, only: vic_b_infilt, vic_Dsmax, vic_Ds, vic_Ws, vic_c, &
+                                      ths_rcc, df_rcc, ep_rcc, qmax_rcc
    USE MOD_Vars_1DFluxes,       only: fevpg
    USE MOD_Opt_Baseflow,        only: scale_baseflow
 #ifdef DataAssimilation
@@ -868,6 +869,11 @@ IF((patchtype<=1) .or. is_dry_lake &
             rsur_se = rsur
             rsur_ie = 0.
 
+         ENDIF
+
+         IF (DEF_USE_RecessionCurve) THEN
+            CALL BaseflowRecessionCurve (nl_soil, icefrac, dz_soisno(1:), zi_soisno(0:), &
+               ths_rcc(ipatch), df_rcc(ipatch), ep_rcc(ipatch), qmax_rcc(ipatch), zwt, rsubst)
          ENDIF
 
          rsubst = rsubst * scale_baseflow(ipatch)

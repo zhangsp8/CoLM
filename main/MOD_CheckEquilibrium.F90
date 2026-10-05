@@ -52,10 +52,11 @@ MODULE MOD_CheckEquilibrium
 CONTAINS
 
    !-----------------------------------------------------------------------
-   SUBROUTINE CheckEqb_init (n_spinupcycle, lc_year)
+   SUBROUTINE CheckEqb_init (n_spinupcycle)
 
    USE MOD_Utils
    USE MOD_Vars_Global,        only: nl_soil
+   USE MOD_Hist,               only: HistForm, ghist
    USE MOD_Forcing,            only: gforc
    USE MOD_LandPatch,          only: numpatch, landpatch
    USE MOD_Pixel,              only: pixel
@@ -65,11 +66,9 @@ CONTAINS
    IMPLICIT NONE
 
    integer, intent(in) :: n_spinupcycle
-   integer, intent(in) :: lc_year
 
    ! Local Variable
-   integer :: ilev, ip, ie, ipxl
-   character(len=256) :: filename, cyear
+   integer  :: ilev, ip, ie, ipxl
    real(r8) :: totaldtws, totalprcp, pct_dtws_prcp
 
 
@@ -109,15 +108,15 @@ CONTAINS
 
 #ifndef SinglePoint
       ! grid
-#ifdef GRIDBASED
-      write(cyear,'(i4.4)') lc_year
-      filename = trim(DEF_dir_landdata) // '/mesh/' //trim(cyear) // '/mesh.nc'
-      CALL gridcheck%define_from_file (filename)
-#else
-      CALL gridcheck%define_by_copy (gforc)
-#endif
+      IF (HistForm == 'Gridded') THEN
+         CALL gridcheck%define_by_copy (ghist)
+      ELSE
+         CALL gridcheck%define_by_copy (gforc)
+      ENDIF
+
       ! grid info for output
       CALL gcheck_concat%set (gridcheck)
+
       ! mapping from patch to grid
       CALL map_check%build_arealweighted (gridcheck, landpatch)
 #endif
@@ -380,7 +379,11 @@ CONTAINS
             IF (nyearcheck == 1) THEN
                CALL map_and_write_check_var ( &
                   vecone, filename, 'landarea', -1, sumarea, filter, &
-                  'area of land excluding water bodies and glaciers in grid', 'km^2', &
+#ifdef CatchLateralFlow
+                  'area of land including soil, urban, wetland, water bodies and glaciers', 'km^2', &
+#else
+                  'area of land including soil, urban and wetland', 'km^2', &
+#endif
                   amount_in_grid = .true.)
             ENDIF
 

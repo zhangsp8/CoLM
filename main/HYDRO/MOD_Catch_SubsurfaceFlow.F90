@@ -277,7 +277,13 @@ CONTAINS
 
             DO i = 1, nhru
 
-               IF (hrus%indx(i) == 0) CYCLE ! river
+               ! river
+               IF (hrus%indx(i) == 0) THEN
+                  ipatch = hru_patch%substt(hrus%ihru(i))
+                  zwt_h(i) = zwt(ipatch)
+                  CYCLE
+               ENDIF
+
                IF (hrus%agwt(i) == 0) CYCLE ! no area of soil, urban or wetland
 
                ps = hru_patch%substt(hrus%ihru(i))
@@ -370,7 +376,11 @@ CONTAINS
                IF (.not. j_is_river) THEN
                   zsubs_h_dn = hrus%elva(j) - zwt_h(j)
                ELSE
-                  zsubs_h_dn = hrus%elva(1) - riverdpth_elm(ielm) + wdsrf_hru(hrus%ihru(1))
+                  IF (zwt_h(j) > 0.) THEN
+                     zsubs_h_dn = hrus%elva(1) - riverdpth_elm(ielm) - zwt_h(j)
+                  ELSE
+                     zsubs_h_dn = hrus%elva(1) - riverdpth_elm(ielm) + wdsrf_hru(hrus%ihru(1))
+                  ENDIF
                ENDIF
 
                IF (.not. j_is_river) THEN
@@ -507,6 +517,11 @@ CONTAINS
             hs = elm_hru%substt(ielm)
             he = elm_hru%subend(ielm)
             wdsrf_elm(ielm) = sum(wdsrf_hru(hs:he) * elm_hru%subfrc(hs:he))
+            IF (lake_id_elm(ielm) > 0) THEN
+               ps = elm_patch%substt(ielm)
+               pe = elm_patch%subend(ielm)
+               zwt_elm(ielm) = sum(zwt(ps:pe) * elm_patch%subfrc(ps:pe))
+            ENDIF
          ENDDO
 
          CALL retrieve_neighbour_data (theta_a_elm, theta_a_nb)
@@ -538,8 +553,12 @@ CONTAINS
                   area_up    = sum(hrus%agwt)
                ELSE
                   theta_a_up = 1.
-                  zsubs_up   = elementneighbour(ielm)%myelva - lakedepth_elm(ielm) + wdsrf_elm(ielm)
-                  area_up    = elementneighbour(ielm)%myarea
+                  IF (zwt_elm(ielm) > 0.) THEN
+                     zsubs_up = elementneighbour(ielm)%myelva - lakedepth_elm(ielm) - zwt_elm(ielm)
+                  ELSE
+                     zsubs_up = elementneighbour(ielm)%myelva - lakedepth_elm(ielm) + wdsrf_elm(ielm)
+                  ENDIF
+                  area_up = elementneighbour(ielm)%myarea
                ENDIF
 
                IF (.not. nb_is_lake) THEN
@@ -550,8 +569,12 @@ CONTAINS
                   area_dn    = agwt_nb(ielm)%val(jnb)
                ELSE
                   theta_a_dn = 1.
-                  zsubs_dn   = elementneighbour(ielm)%elva(jnb) - lakedp_nb(ielm)%val(jnb) + wdsrf_nb(ielm)%val(jnb)
-                  area_dn    = elementneighbour(ielm)%area(jnb)
+                  IF (zwt_nb(ielm)%val(jnb) > 0.) THEN
+                     zsubs_dn = elementneighbour(ielm)%elva(jnb) - lakedp_nb(ielm)%val(jnb) - zwt_nb(ielm)%val(jnb)
+                  ELSE
+                     zsubs_dn = elementneighbour(ielm)%elva(jnb) - lakedp_nb(ielm)%val(jnb) + wdsrf_nb(ielm)%val(jnb)
+                  ENDIF
+                  area_dn = elementneighbour(ielm)%area(jnb)
                ENDIF
 
                IF ((.not. iam_lake)   .and. (area_up <= 0)) CYCLE

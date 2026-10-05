@@ -120,7 +120,7 @@ CONTAINS
    character(len=256) :: fsoildat
    character(len=256) :: fsnowdat
    character(len=256) :: fcndat
-   character(len=256) :: ftopo, lndname
+   character(len=256) :: ftopo, lndname, frcc
    type(grid_type) :: gsoil
    type(grid_type) :: gsnow
    type(grid_type) :: gcn
@@ -534,6 +534,29 @@ ENDIF
 #endif
 
          ENDIF
+      ENDIF
+
+      IF (DEF_USE_RecessionCurve) THEN
+
+         frcc = trim(dir_landdata)//'/recession_curve/'// trim(cyear)//'/ths_rcc_patches.nc'
+         CALL ncio_read_vector (frcc, 'ths_rcc_patches', landpatch, ths_rcc)
+
+         frcc = trim(dir_landdata)//'/recession_curve/'// trim(cyear)//'/df_rcc_patches.nc'
+         CALL ncio_read_vector (frcc, 'df_rcc_patches', landpatch, df_rcc)
+
+         frcc = trim(dir_landdata)//'/recession_curve/'// trim(cyear)//'/ep_rcc_patches.nc'
+         CALL ncio_read_vector (frcc, 'ep_rcc_patches', landpatch, ep_rcc)
+
+         frcc = trim(dir_landdata)//'/recession_curve/'// trim(cyear)//'/qmax_rcc_patches.nc'
+         CALL ncio_read_vector (frcc, 'qmax_rcc_patches', landpatch, qmax_rcc)
+
+#ifdef RangeCheck
+         CALL check_vector_data ('porosity in rcc    ', ths_rcc,  spval)
+         CALL check_vector_data ('decay factor in rcc', df_rcc,   spval)
+         CALL check_vector_data ('exponent in rcc    ', ep_rcc,   spval)
+         CALL check_vector_data ('qmax in rcc        ', qmax_rcc, spval)
+#endif
+
       ENDIF
 
       IF (DEF_Runoff_SCHEME == 1) THEN

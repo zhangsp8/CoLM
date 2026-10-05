@@ -333,7 +333,11 @@ CONTAINS
    IMPLICIT NONE
    character(len=*), optional :: mesg
 
-      IF (present(mesg)) write(*,*) trim(mesg)
+      IF (present(mesg)) THEN
+         write(*,*) trim(mesg)
+      ELSE
+         write(*,*) 'Process ID ', p_iam_glb, ' call CoLM_stop.'
+      ENDIF
 
 #ifdef USEMPI
       CALL mpi_abort (p_comm_glb, 1, p_err)

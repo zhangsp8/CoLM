@@ -180,6 +180,11 @@ CONTAINS
 
             ENDIF
          ENDDO
+
+         IF (any(addrelement == -1)) THEN
+            write(*,*) 'Warning: region defined in namelist file does not cover all basins.'
+            CALL CoLM_stop ()
+         ENDIF
       ENDIF
 #endif
 

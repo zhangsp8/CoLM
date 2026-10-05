@@ -40,7 +40,7 @@ MODULE MOD_HistGridded
 !--------------------------------------------------------------------------
 CONTAINS
 
-   SUBROUTINE hist_gridded_init (dir_hist, lulcc_call)
+   SUBROUTINE hist_gridded_init (dir_hist, lc_year, lulcc_call)
 
    USE MOD_SPMD_Task
    USE MOD_Vars_Global
@@ -58,13 +58,20 @@ CONTAINS
    IMPLICIT NONE
 
    character(len=*) , intent(in) :: dir_hist
+   integer,           intent(in) :: lc_year
    logical, optional, intent(in) :: lulcc_call
 
    ! Local Variables
    type(block_data_real8_2d) :: gridarea
    integer :: iblkme, xblk, yblk, xloc, yloc, xglb, yglb
+   character(len=256) :: filename, cyear
 
-      IF (DEF_hist_grid_as_forcing) THEN
+
+      IF (DEF_hist_grid_as_model_mesh) THEN
+         write(cyear,'(i4.4)') lc_year
+         filename = trim(DEF_dir_landdata) // '/mesh/' //trim(cyear) // '/mesh.nc'
+         CALL ghist%define_from_file (filename)
+      ELSEIF (DEF_hist_grid_as_forcing) THEN
          CALL ghist%define_by_copy (gforc)
       ELSE
          CALL ghist%define_by_res (DEF_hist_lon_res, DEF_hist_lat_res)

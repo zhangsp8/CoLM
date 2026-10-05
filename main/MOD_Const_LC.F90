@@ -508,7 +508,7 @@ MODULE MOD_Const_LC
       = (/0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08,&
           0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08,&
           0.08 /)
-   
+
    !c3c4 flag
    integer, parameter, dimension(N_land_classification) :: c3c4_igbp &
       = (/1, 1, 1, 1, 1, 1, 1, 1,&

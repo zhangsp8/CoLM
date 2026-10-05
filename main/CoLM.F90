@@ -30,6 +30,7 @@ PROGRAM CoLM
    USE MOD_Forcing
    USE MOD_Hist
    USE MOD_CheckEquilibrium
+   USE MOD_SpinupSpeedup
    USE MOD_TimeManager
    USE MOD_RangeCheck
 
@@ -340,10 +341,10 @@ PROGRAM CoLM
       CALL allocate_2D_Forcing (gforc)
 
       ! Initialize history data module
-      CALL hist_init (dir_hist)
+      CALL hist_init (dir_hist, lc_year)
       CALL allocate_1D_Fluxes ()
 
-      CALL CheckEqb_init (n_spinupcycle, lc_year)
+      CALL CheckEqb_init (n_spinupcycle)
 
 #if (defined CaMa_Flood)
 #ifdef USEMPI
@@ -522,6 +523,10 @@ PROGRAM CoLM
          ! ----------------------------------------------------------------------
          CALL hist_out (idate, deltim, itstamp, etstamp, ptstamp, dir_hist, casename)
 
+         ! Speed up spinup
+         ! ----------------------------------------------------------------------
+         CALL spinup_speedup (idate, deltim, is_spinup)
+
          ! DO land use and land cover change simulation
          ! ----------------------------------------------------------------------
 #ifdef LULCC
@@ -542,7 +547,7 @@ PROGRAM CoLM
             CALL allocate_1D_Forcing
             CALL forcing_init (dir_forcing, deltim, itstamp, jdate(1), lulcc_call=.true.)
 
-            CALL hist_init (dir_hist, lulcc_call=.true.)
+            CALL hist_init (dir_hist, lc_year, lulcc_call=.true.)
             CALL allocate_1D_Fluxes
          ENDIF
 #endif

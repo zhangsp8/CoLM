@@ -122,7 +122,7 @@ CONTAINS
    real(r8), intent(in) :: deltime
 
    ! Local Variables
-   integer  :: i, j, j0, h, ps, pe, istep, s
+   integer  :: i, j, j0, h, ps, pe, p, istep, s
    real(r8) :: rnofsrf, sumarea
    real(r8), allocatable :: wdsrf_p (:), wdsrf_hru_p (:)
 #ifdef CoLMDEBUG
@@ -282,7 +282,11 @@ CONTAINS
                   pe = hru_patch%subend(h)
 
                   IF (hillslope_element(i)%indx(j) == 0) THEN
-                     fldarea(ps:pe) = 1.0 ! river
+                     IF (wdsrf_hru(h) > 1.e-4) THEN
+                        fldarea(ps:pe) = 1.0 ! river
+                     ELSE
+                        fldarea(ps:pe) = 0.  ! river is dry
+                     ENDIF
                   ELSE
                      s = findloc_ud(hillslope_element(i)%fldprof(:,j) <= wdsrf_hru(h), back = .true.)
                      IF (s == nfldstep) THEN
@@ -299,7 +303,13 @@ CONTAINS
             ELSE
                ps = elm_patch%substt(i)
                pe = elm_patch%subend(i)
-               fldarea(ps:pe) = 1.0 ! lake
+               DO p = ps, pe
+                  IF (wdsrf(p) > 0.1) THEN
+                     fldarea(p) = 1.0 ! lake
+                  ELSE
+                     fldarea(p) = 0.  ! dry lake
+                  ENDIF
+               ENDDO
             ENDIF
          ENDDO
 
@@ -394,27 +404,25 @@ CONTAINS
          IF (numpatch > 0) rnof = rsur + rsub
 
          ! (4) ---------------- vertical layers adjustment ---------------------
-         IF (DEF_USE_Dynamic_Lake) THEN
-            DO i = 1, numpatch
-               IF (wdsrf_p(i) >= 100.) THEN
-                  ! wet previously
-                  dz_lake(:,i) = dz_lake(:,i) * wdsrf(i)*1.e-3/sum(dz_lake(:,i))
+         DO i = 1, numpatch
+            IF (wdsrf_p(i) >= 100.) THEN
+               ! wet previously
+               dz_lake(:,i) = dz_lake(:,i) * wdsrf(i)*1.e-3/sum(dz_lake(:,i))
+            ELSE
+               ! dry previously
+               dz_lake(:,i) = wdsrf(i)*1.e-3/nl_lake
+               t_lake (:,i) = t_soisno(1,i)
+               IF (t_soisno(1,i) >= tfrz) THEN
+                  lake_icefrac(:,i) = 0.
                ELSE
-                  ! dry previously
-                  dz_lake(:,i) = wdsrf(i)*1.e-3/nl_lake
-                  t_lake (:,i) = t_soisno(1,i)
-                  IF (t_soisno(1,i) >= tfrz) THEN
-                     lake_icefrac(:,i) = 0.
-                  ELSE
-                     lake_icefrac(:,i) = 1.
-                  ENDIF
+                  lake_icefrac(:,i) = 1.
                ENDIF
+            ENDIF
 
-               IF (wdsrf(i) >= 100.) THEN
-                  CALL adjust_lake_layer (nl_lake, dz_lake(:,i), t_lake(:,i), lake_icefrac(:,i))
-               ENDIF
-            ENDDO
-         ENDIF
+            IF (wdsrf(i) >= 100.) THEN
+               CALL adjust_lake_layer (nl_lake, dz_lake(:,i), t_lake(:,i), lake_icefrac(:,i))
+            ENDIF
+         ENDDO
 
       ENDIF
 

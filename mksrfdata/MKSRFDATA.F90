@@ -488,13 +488,15 @@ IF (.not. (skip_rest)) THEN
          CALL Aggregation_TopographyFactors_Simple (grid_topo_factor, &
             trim(DEF_DS_HiresTopographyDataDir), dir_landdata, lc_year)
       ENDIF
-      
+
 #ifdef URBAN_MODEL
       CALL Aggregation_urban (dir_rawdata, dir_landdata, lc_year, &
                               grid_urban_5km, grid_urban_500m)
 #endif
 
       CALL Aggregation_SoilTexture     (grid_soil, dir_rawdata, dir_landdata, lc_year)
+
+      CALL Aggregation_RecessionCurves (grid_500m, dir_rawdata, dir_landdata, lc_year)
 
 ENDIF
 

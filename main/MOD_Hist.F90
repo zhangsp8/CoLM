@@ -47,11 +47,12 @@ MODULE MOD_Hist
 !--------------------------------------------------------------------------
 CONTAINS
 
-   SUBROUTINE hist_init (dir_hist, lulcc_call)
+   SUBROUTINE hist_init (dir_hist, lc_year, lulcc_call)
 
    IMPLICIT NONE
 
    character(len=*) , intent(in) :: dir_hist
+   integer,           intent(in) :: lc_year
    logical, optional, intent(in) :: lulcc_call
 
       CALL allocate_acc_fluxes ()
@@ -69,9 +70,9 @@ CONTAINS
 
       IF (HistForm == 'Gridded') THEN
          IF (present(lulcc_call)) THEN
-            CALL hist_gridded_init (dir_hist, lulcc_call)
+            CALL hist_gridded_init (dir_hist, lc_year, lulcc_call)
          ELSE
-            CALL hist_gridded_init (dir_hist)
+            CALL hist_gridded_init (dir_hist, lc_year)
          ENDIF
 #ifdef SinglePoint
       ELSEIF (HistForm == 'Single') THEN
@@ -4425,7 +4426,7 @@ ENDIF
             'the depth to water table','m')
 
          ! --------------------------------------------------------------------
-         ! depth of surface water (including land ice and ocean patches)
+         ! depth of surface water (including land ice and water body patches)
          ! --------------------------------------------------------------------
          IF (p_is_worker) THEN
             IF (numpatch > 0) THEN

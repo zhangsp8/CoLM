@@ -274,6 +274,8 @@ MODULE MOD_Namelist
 
    integer :: DEF_TOPMOD_method = 0
 
+   logical :: DEF_USE_RecessionCurve = .false.
+
    ! ----- Treat exposed soil and snow surface separately -----
    ! including solar absorption, sensible/latent heat, ground temperature,
    ! ground heat flux and ground evp/dew/subl/fros. Corresponding vars are
@@ -1123,6 +1125,7 @@ CONTAINS
       DEF_RSS_SCHEME,                         &
       DEF_Runoff_SCHEME,                      &
       DEF_TOPMOD_method,                      &
+      DEF_USE_RecessionCurve,                 &
       DEF_SPLIT_SOILSNOW,                     &
       DEF_VEG_SNOW,                           &
       DEF_file_VIC_para,                      &
@@ -1747,6 +1750,7 @@ CONTAINS
       CALL mpi_bcast (DEF_file_VIC_para                      ,256 ,mpi_character ,p_address_master ,p_comm_glb ,p_err)
       CALL mpi_bcast (DEF_file_VIC_OPT                       ,256 ,mpi_character ,p_address_master ,p_comm_glb ,p_err)
       CALL mpi_bcast (DEF_TOPMOD_method                      ,1   ,mpi_integer   ,p_address_master ,p_comm_glb ,p_err)
+      CALL mpi_bcast (DEF_USE_RecessionCurve                 ,1   ,mpi_logical   ,p_address_master ,p_comm_glb ,p_err)
       ! 08/2023, added by hua yuan
       CALL mpi_bcast (DEF_SPLIT_SOILSNOW                     ,1   ,mpi_logical   ,p_address_master ,p_comm_glb ,p_err)
       CALL mpi_bcast (DEF_VEG_SNOW                           ,1   ,mpi_logical   ,p_address_master ,p_comm_glb ,p_err)
