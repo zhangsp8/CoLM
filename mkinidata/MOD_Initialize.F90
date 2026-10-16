@@ -485,7 +485,7 @@ ENDIF
       ! (see Niu et al., 2005)
       IF (DEF_Runoff_SCHEME == 0) THEN
 
-         ! DEF_TOPMOD_method == 0 or default
+         ! (DEF_TOPMOD_method == 0) or as default
          IF (p_is_worker) THEN
             IF (numpatch > 0) THEN
                ! equal to 'wtfact = 0.38' and 'fff = 0.5'
