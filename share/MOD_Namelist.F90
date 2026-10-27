@@ -336,7 +336,7 @@ MODULE MOD_Namelist
 ! ----- Part 11: parameterization schemes -----
 ! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-   integer :: DEF_Interception_scheme = 1  !1:CoLM；2:CLM4.5; 3:CLM5; 4:Noah-MP; 5:MATSIRO; 6:VIC; 7:JULES
+   integer :: DEF_Interception_scheme = 1
 
    ! ----- SOIL parameters and supercool water setting ------
    integer :: DEF_THERMAL_CONDUCTIVITY_SCHEME = 4  ! Options for soil thermal conductivity schemes
@@ -425,15 +425,30 @@ MODULE MOD_Namelist
 
    ! ----- CaMa-Flood -----
    character(len=256) :: DEF_CaMa_Namelist = 'null'
+   character(len=256) :: DEF_CaMa_Restart_file = 'null'
+   logical :: DEF_CaMa_FloodFeedback = .false.
+   logical :: DEF_CaMa_StrictDomain = .false.
 
    ! ----- lateral flow related -----
    character(len=256) :: DEF_ElementNeighbour_file = 'null'
    character(len=256) :: DEF_UnitCatchment_file    = 'null'
+   logical :: DEF_UnitCatchment_regional = .false.
+   character(len=*), parameter :: REGIONAL_UNITCATCHMENT_SUFFIX = '/riverlake/unitcatchment_regional.nc'
    character(len=256) :: DEF_ReservoirPara_file    = 'null'
 
    logical  :: DEF_USE_EstimatedRiverDepth  = .true.
    integer  :: DEF_Reservoir_Method         = 0
    real(r8) :: DEF_GRIDBASED_ROUTING_MAX_DT = 3600.
+   logical  :: DEF_GRIDBASED_ROUTING_MOMENTUM_DT_LIMIT = .false.
+   ! .false.: with bifurcation, the storage bound (volume / net outflow) no longer
+   ! limits the routing sub-step; the outgoing-flux limiter keeps storage
+   ! non-negative instead, so dt is limited by CFL (and the momentum bound, if on)
+   ! only.  Without bifurcation there is no such limiter and the bound always applies.
+   logical  :: DEF_GRIDBASED_ROUTING_STORAGE_DT_LIMIT = .true.
+   logical  :: DEF_GridRiverLake_FloodFeedback = .false.
+   real(r8) :: DEF_GridRiverLake_FloodInfiltMax = 5._r8
+   logical  :: DEF_USE_LEVEE = .false.
+   logical  :: DEF_USE_BIFURCATION = .false.
 
    ! ----- sediment module -----
    logical  :: DEF_USE_SEDIMENT        = .false.
@@ -1376,6 +1391,12 @@ CONTAINS
       DEF_USE_EstimatedRiverDepth,            &
       DEF_Reservoir_Method,                   &
       DEF_GRIDBASED_ROUTING_MAX_DT,           &
+      DEF_GRIDBASED_ROUTING_MOMENTUM_DT_LIMIT, &
+      DEF_GRIDBASED_ROUTING_STORAGE_DT_LIMIT,  &
+      DEF_GridRiverLake_FloodFeedback,        &
+      DEF_GridRiverLake_FloodInfiltMax,        &
+      DEF_USE_LEVEE,                          &
+      DEF_USE_BIFURCATION,                    &
 
       DEF_USE_SEDIMENT,                       &
       DEF_SED_LAMBDA,                         &
@@ -1422,9 +1443,13 @@ CONTAINS
       DEF_file_snowaging ,                    &
 
       DEF_CaMa_Namelist,                      &
+      DEF_CaMa_Restart_file,                  &
+      DEF_CaMa_FloodFeedback,                 &
+      DEF_CaMa_StrictDomain,                  &
 
       DEF_ElementNeighbour_file,              &
       DEF_UnitCatchment_file,                 &
+      DEF_UnitCatchment_regional,             &
       DEF_ReservoirPara_file,                 &
 
       DEF_DA_obsdir,                          &
@@ -1530,6 +1555,33 @@ CONTAINS
             write(*,*) '                  *****                  '
             write(*,*) 'Warning: timestep should be less than or equal to 3600 seconds.'
             CALL CoLM_Stop ()
+         ENDIF
+
+         IF (DEF_UnitCatchment_regional) THEN
+            IF (trim(DEF_UnitCatchment_file) == 'null') &
+               CALL CoLM_Stop ('Regional unit catchment requires DEF_UnitCatchment_file.')
+            IF (len_trim(DEF_dir_landdata) + len(REGIONAL_UNITCATCHMENT_SUFFIX) > len(DEF_dir_landdata)) &
+               CALL CoLM_Stop ('Regional unit catchment path is too long.')
+#ifndef GridRiverLakeFlow
+            CALL CoLM_Stop ('Regional unit catchment requires GridRiverLakeFlow.')
+#endif
+         ENDIF
+#ifndef GridRiverLakeFlow
+         IF (DEF_GridRiverLake_FloodFeedback .or. &
+             DEF_USE_LEVEE) &
+            CALL CoLM_Stop ('RiverLake features require GridRiverLakeFlow.')
+#endif
+         IF (.not. (DEF_GRIDBASED_ROUTING_MAX_DT > 0._r8 .and. DEF_GRIDBASED_ROUTING_MAX_DT < huge(1._r8))) &
+            CALL CoLM_Stop ('DEF_GRIDBASED_ROUTING_MAX_DT must be finite and positive.')
+#ifndef CaMa_Flood
+         IF (DEF_CaMa_FloodFeedback) CALL CoLM_Stop ('CaMa feedback requires CaMa_Flood.')
+#endif
+#if !defined GridRiverLakeFlow && !defined CaMa_Flood
+         IF (DEF_USE_BIFURCATION) CALL CoLM_Stop ('Bifurcation requires a river routing solver.')
+#endif
+         IF ((DEF_GridRiverLake_FloodFeedback .or. DEF_CaMa_FloodFeedback) .and. DEF_Runoff_SCHEME /= 0) THEN
+            write(*,*) 'Note: DEF_Runoff_SCHEME is set to 0 for two-way river coupling.'
+            DEF_Runoff_SCHEME = 0
          ENDIF
 
 ! ===============================================================
@@ -2166,9 +2218,13 @@ ENDIF
       CALL mpi_bcast (DEF_file_snowaging                     ,256 ,mpi_character ,p_address_master ,p_comm_glb ,p_err)
 
       CALL mpi_bcast (DEF_CaMa_Namelist                      ,256 ,mpi_character ,p_address_master ,p_comm_glb ,p_err)
+      CALL mpi_bcast (DEF_CaMa_Restart_file                  ,256 ,mpi_character ,p_address_master ,p_comm_glb ,p_err)
+      CALL mpi_bcast (DEF_CaMa_FloodFeedback                 ,1   ,mpi_logical   ,p_address_master ,p_comm_glb ,p_err)
+      CALL mpi_bcast (DEF_CaMa_StrictDomain                  ,1   ,mpi_logical   ,p_address_master ,p_comm_glb ,p_err)
 
       CALL mpi_bcast (DEF_ElementNeighbour_file              ,256 ,mpi_character ,p_address_master ,p_comm_glb ,p_err)
       CALL mpi_bcast (DEF_UnitCatchment_file                 ,256 ,mpi_character ,p_address_master ,p_comm_glb ,p_err)
+      CALL mpi_bcast (DEF_UnitCatchment_regional             ,1   ,mpi_logical   ,p_address_master ,p_comm_glb ,p_err)
       CALL mpi_bcast (DEF_ReservoirPara_file                 ,256 ,mpi_character ,p_address_master ,p_comm_glb ,p_err)
 
       CALL mpi_bcast (DEF_DA_obsdir                          ,256 ,mpi_character ,p_address_master ,p_comm_glb ,p_err)
@@ -2191,6 +2247,12 @@ ENDIF
       CALL mpi_bcast (DEF_USE_EstimatedRiverDepth            ,1   ,mpi_logical   ,p_address_master ,p_comm_glb ,p_err)
       CALL mpi_bcast (DEF_Reservoir_Method                   ,1   ,mpi_integer   ,p_address_master ,p_comm_glb ,p_err)
       CALL mpi_bcast (DEF_GRIDBASED_ROUTING_MAX_DT           ,1   ,mpi_real8     ,p_address_master ,p_comm_glb ,p_err)
+      CALL mpi_bcast (DEF_GRIDBASED_ROUTING_MOMENTUM_DT_LIMIT,1   ,mpi_logical   ,p_address_master ,p_comm_glb ,p_err)
+      CALL mpi_bcast (DEF_GRIDBASED_ROUTING_STORAGE_DT_LIMIT ,1   ,mpi_logical   ,p_address_master ,p_comm_glb ,p_err)
+      CALL mpi_bcast (DEF_GridRiverLake_FloodFeedback        ,1   ,mpi_logical   ,p_address_master ,p_comm_glb ,p_err)
+      CALL mpi_bcast (DEF_GridRiverLake_FloodInfiltMax       ,1   ,mpi_real8     ,p_address_master ,p_comm_glb ,p_err)
+      CALL mpi_bcast (DEF_USE_LEVEE                          ,1   ,mpi_logical   ,p_address_master ,p_comm_glb ,p_err)
+      CALL mpi_bcast (DEF_USE_BIFURCATION                    ,1   ,mpi_logical   ,p_address_master ,p_comm_glb ,p_err)
 
       CALL mpi_bcast (DEF_USE_SEDIMENT                       ,1   ,mpi_logical   ,p_address_master ,p_comm_glb ,p_err)
       CALL mpi_bcast (DEF_SED_LAMBDA                         ,1   ,mpi_real8     ,p_address_master ,p_comm_glb ,p_err)
@@ -3043,6 +3105,29 @@ ENDIF
 #endif
 
    END SUBROUTINE sync_hist_vars_one
+
+   ! path of the regional unit catchment file written by mksrfdata
+   FUNCTION regional_unitcatchment_file () RESULT (fname)
+
+   IMPLICIT NONE
+   character(len=256) :: fname
+
+      fname = trim(DEF_dir_landdata) // REGIONAL_UNITCATCHMENT_SUFFIX
+
+   END FUNCTION regional_unitcatchment_file
+
+   FUNCTION get_unitcatchment_file () RESULT (fname)
+
+   IMPLICIT NONE
+   character(len=256) :: fname
+
+      IF (DEF_UnitCatchment_regional) THEN
+         fname = regional_unitcatchment_file ()
+      ELSE
+         fname = DEF_UnitCatchment_file
+      ENDIF
+
+   END FUNCTION get_unitcatchment_file
 
    ! get file name only from full file path
    FUNCTION get_basename(path) result(fn)

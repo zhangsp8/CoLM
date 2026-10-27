@@ -11,6 +11,13 @@ MODULE MOD_SoilSnowHydrology
                            DEF_USE_Dynamic_Wetland, DEF_USE_RecessionCurve
 #if (defined CaMa_Flood)
    USE YOS_CMF_INPUT,      only: LWINFILT
+#elif (defined GridRiverLakeFlow)
+   ! [GridRiverLakeFlow] Grid flood feedback reuses the CaMa flood-feedback code paths
+   ! (all "CaMa_Flood || GridRiverLakeFlow" blocks in this file), with its namelist
+   ! switch in place of CaMa's LWINFILT.  CaMa_Flood builds are unchanged, and with
+   ! DEF_GridRiverLake_FloodFeedback = .false. (default) the blocks do nothing, as
+   ! without them (checked: land restart bit-identical to upstream).
+   USE MOD_Namelist,       only: LWINFILT => DEF_GridRiverLake_FloodFeedback, DEF_GridRiverLake_FloodInfiltMax
 #endif
    USE MOD_LandPatch, only: landpatch
    USE MOD_Runoff
@@ -50,7 +57,7 @@ CONTAINS
               rsur        ,rnof        ,qinfl       ,pondmx      ,ssi         ,&
               wimp        ,smpmin      ,zwt         ,wdsrf       ,wa          ,&
               qcharge                                                         ,&
-#if (defined CaMa_Flood)
+#if (defined CaMa_Flood) || (defined GridRiverLakeFlow)
               flddepth    ,fldfrc      ,qinfl_fld                             ,&
 #endif
 ! SNICAR model variables
@@ -138,7 +145,7 @@ CONTAINS
         qfros_snow              ,&! surface dew added to snow pack (mm h2o /s) [+]
         fsno                      ! snow fractional cover
 
-#if (defined CaMa_Flood)
+#if (defined CaMa_Flood) || (defined GridRiverLakeFlow)
    real(r8), intent(inout) :: flddepth  ! inundation water depth [mm]
    real(r8), intent(in)    :: fldfrc    ! inundation water depth   [0-1]
    real(r8), intent(out)   :: qinfl_fld ! grid averaged inundation water input from top (mm/s)
@@ -201,14 +208,27 @@ CONTAINS
        zimm(0:nl_soil)            ! interface level below a "z" level (mm)
 
    real(r8) :: err_solver, w_sum
-#if (defined CaMa_Flood)
+#if (defined CaMa_Flood) || (defined GridRiverLakeFlow)
    real(r8) ::gfld ,rsur_fld, qinfl_fld_subgrid ! inundation water input from top (mm/s)
+   real(r8) :: rsubst_fld, fevpg_runoff
 #endif
 
    real(r8) :: gwat_prev
    integer  :: ps, pe, m
 
    real(r8) :: wliq_soisno_tmp(1:nl_soil)
+
+#if (defined CaMa_Flood) || (defined GridRiverLakeFlow)
+      fevpg_runoff = fevpg(ipatch)
+      IF (patchtype == 0) THEN
+         IF (DEF_SPLIT_SOILSNOW) THEN
+            fevpg_runoff = qseva_soil + qseva_snow + qsubl_soil + qsubl_snow - qsdew_soil - qsdew_snow - qfros_soil - qfros_snow
+         ELSE
+            fevpg_runoff = qseva + qsubl - qsdew - qfros
+         ENDIF
+      ENDIF
+      qinfl_fld = 0._r8
+#endif
 
 !=======================================================================
 ! [1] update the liquid water within snow layer and the water onto soil
@@ -304,7 +324,11 @@ IF(patchtype<=1)THEN   ! soil ground only
 
          wliq_soisno_tmp(:) = 0
          CALL Runoff_VIC(deltim, porsl, theta_r, hksati, bsw, &
+#if (defined CaMa_Flood) || (defined GridRiverLakeFlow)
+                         wice_soisno(1:nl_soil), wliq_soisno(1:nl_soil), fevpg_runoff, rootflux, gwat, &
+#else
                          wice_soisno(1:nl_soil), wliq_soisno(1:nl_soil), fevpg(ipatch), rootflux, gwat, &
+#endif
                          vic_b_infilt(ipatch), vic_Dsmax(ipatch), vic_Ds(ipatch), vic_Ws(ipatch), vic_c(ipatch),&
                          rsur, rsubst, wliq_soisno_tmp(1:nl_soil))
 
@@ -343,13 +367,13 @@ IF(patchtype<=1)THEN   ! soil ground only
       ! infiltration into surface soil layer
       qinfl = gwat - rsur - wdsrf/deltim
 
-#if (defined CaMa_Flood)
+#if (defined CaMa_Flood) || (defined GridRiverLakeFlow)
       IF (LWINFILT) THEN
          !  re-infiltration [mm/s] calculation.
-         ! IF surface runoff is occurred (rsur != 0.), flood depth <1.e-6  and flood fraction <0.05,
-         ! the re-infiltration will not be calculated.
-         IF ((flddepth .gt. 1.e-6).and.(fldfrc .gt. 0.05) .and. (patchtype == 0) ) THEN
+         ! flddepth is the flood credit published by CaMa over the inundated part of the patch.
+         IF (patchtype == 0 .and. flddepth > 0._r8 .and. fldfrc > EPSILON(1._r8)) THEN
             gfld=flddepth/deltim ! [mm/s]
+            rsubst_fld = rsubst
             ! surface runoff from inundation, this should not be added to the surface runoff from soil
             ! otherwise, the surface runoff will be double counted.
             ! only the re-infiltration is added to water balance calculation.
@@ -362,20 +386,28 @@ IF(patchtype<=1)THEN   ! soil ground only
             ELSEIF (DEF_Runoff_SCHEME  == 1) THEN
                wliq_soisno_tmp(:) = 0
                CALL Runoff_VIC(deltim, porsl, theta_r, hksati, bsw, &
-                               wice_soisno(1:nl_soil), wliq_soisno(1:nl_soil), fevpg(ipatch), rootflux, gfld, &
+                               wice_soisno(1:nl_soil), wliq_soisno(1:nl_soil), fevpg_runoff, rootflux, gfld, &
                                vic_b_infilt(ipatch), vic_Dsmax(ipatch), vic_Ds(ipatch), vic_Ws(ipatch), vic_c(ipatch),&
-                               rsur_fld, rsubst, wliq_soisno_tmp(1:nl_soil))
+                               rsur_fld, rsubst_fld, wliq_soisno_tmp(1:nl_soil))
             ELSEIF (DEF_Runoff_SCHEME  == 2) THEN
                CALL Runoff_XinAnJiang (&
                   nl_soil, dz_soisno(1:nl_soil), eff_porosity(1:nl_soil), vol_liq(1:nl_soil), &
-                  elvstd, gfld, deltim, rsur_fld, rsubst)
+                  elvstd, gfld, deltim, rsur_fld, rsubst_fld)
             ELSEIF (DEF_Runoff_SCHEME  == 3) THEN
                CALL Runoff_SimpleVIC (&
                   nl_soil, dz_soisno(1:nl_soil), eff_porosity(1:nl_soil), vol_liq(1:nl_soil), &
-                  BVIC, gfld, deltim, rsur_fld, rsubst)
+                  BVIC, gfld, deltim, rsur_fld, rsubst_fld)
             ENDIF
             ! infiltration into surface soil layer
             qinfl_fld_subgrid = gfld - rsur_fld !assume the re-infiltration is occurred in whole patch area.
+            qinfl_fld_subgrid = MIN(gfld,MAX(0._r8,qinfl_fld_subgrid))
+#ifdef GridRiverLakeFlow
+            IF (DEF_GridRiverLake_FloodInfiltMax >= 0._r8 .and. &
+                qinfl_fld_subgrid > DEF_GridRiverLake_FloodInfiltMax/86400._r8) THEN
+               qinfl_fld_subgrid = DEF_GridRiverLake_FloodInfiltMax/86400._r8
+               rsur_fld = gfld - qinfl_fld_subgrid
+            ENDIF
+#endif
          ELSE
             qinfl_fld_subgrid=0.0d0
             gfld=0.0d0
@@ -384,7 +416,7 @@ IF(patchtype<=1)THEN   ! soil ground only
          ENDIF
          qinfl_fld=qinfl_fld_subgrid*fldfrc ! [mm/s] re-infiltration in grid.
          qinfl=qinfl_fld+qinfl ! [mm/s] total infiltration in grid.
-         flddepth=flddepth-deltim*qinfl_fld_subgrid ! renew flood depth [mm], the flood depth is reduced by re-infiltration but only in inundation area.
+         flddepth=MAX(0._r8,flddepth-deltim*qinfl_fld_subgrid) ! renew flood depth [mm], the flood depth is reduced by re-infiltration but only in inundation area.
       ENDIF
 #endif
 
@@ -446,7 +478,7 @@ ELSE
       err_solver = err_solver-(qsdew_soil+qfros_soil-qsubl_soil)*deltim
 ENDIF
 
-#if (defined CaMa_Flood)
+#if (defined CaMa_Flood) || (defined GridRiverLakeFlow)
       IF (LWINFILT) THEN
          err_solver = err_solver-(gfld-rsur_fld)*fldfrc*deltim
       ENDIF
@@ -515,7 +547,7 @@ ENDIF
               rsubst      ,rnof        ,qinfl       ,qlayer      ,ssi         ,&
               pondmx      ,wimp        ,zwt         ,wdsrf       ,wa          ,&
               wetwat                                                          ,&
-#if (defined CaMa_Flood)
+#if (defined CaMa_Flood) || (defined GridRiverLakeFlow)
               flddepth    ,fldfrc      ,qinfl_fld                             ,&
 #endif
 ! SNICAR model variables
@@ -618,7 +650,7 @@ ENDIF
         qsubl_snow       , &! sublimation rate from snow pack (mm h2o /s) [+]
         qfros_snow       , &! surface dew added to snow pack (mm h2o /s) [+]
         fsno                ! snow fractional cover
-#if (defined CaMa_Flood)
+#if (defined CaMa_Flood) || (defined GridRiverLakeFlow)
    real(r8), intent(inout) :: flddepth  ! inundation water input from top (mm/s)
    real(r8), intent(in)    :: fldfrc    ! inundation water input from top (mm/s)
    real(r8), intent(out)   :: qinfl_fld ! inundation water input from top (mm/s)
@@ -703,8 +735,9 @@ ENDIF
    integer, parameter :: nprms = 5
 #endif
    real(r8) :: prms(nprms, 1:nl_soil)
-#if (defined CaMa_Flood)
+#if (defined CaMa_Flood) || (defined GridRiverLakeFlow)
    real(r8) :: gfld,qinfl_all,rsur_fld, qinfl_fld_subgrid! inundation water input from top (mm/s)
+   real(r8) :: rsubst_fld, fevpg_runoff
 #endif
 
    type(soil_con_struct ) :: soil_con
@@ -725,6 +758,18 @@ ENDIF
       prms(3,1:nl_soil) = L_vgm    (1:nl_soil)
       prms(4,1:nl_soil) = sc_vgm   (1:nl_soil)
       prms(5,1:nl_soil) = fc_vgm   (1:nl_soil)
+#endif
+
+#if (defined CaMa_Flood) || (defined GridRiverLakeFlow)
+      fevpg_runoff = fevpg(ipatch)
+      IF (patchtype == 0) THEN
+         IF (DEF_SPLIT_SOILSNOW) THEN
+            fevpg_runoff = qseva_soil + qseva_snow + qsubl_soil + qsubl_snow - qsdew_soil - qsdew_snow - qfros_soil - qfros_snow
+         ELSE
+            fevpg_runoff = qseva + qsubl - qsdew - qfros
+         ENDIF
+      ENDIF
+      qinfl_fld = 0._r8
 #endif
 
 !=======================================================================
@@ -837,7 +882,11 @@ IF((patchtype<=1) .or. is_dry_lake &
             ! 1: runoff scheme from VIC model
 
             CALL Runoff_VIC(deltim, porsl, theta_r, hksati, bsw, &
+#if (defined CaMa_Flood) || (defined GridRiverLakeFlow)
+               wice_soisno(1:nl_soil), wliq_soisno(1:nl_soil), fevpg_runoff, rootflux, gwat, &
+#else
                wice_soisno(1:nl_soil), wliq_soisno(1:nl_soil), fevpg(ipatch), rootflux, gwat, &
+#endif
                vic_b_infilt(ipatch), vic_Dsmax(ipatch), vic_Ds(ipatch), vic_Ws(ipatch), vic_c(ipatch),&
                rsur, rsubst, wliq_soisno_tmp)
 
@@ -906,13 +955,13 @@ IF((patchtype<=1) .or. is_dry_lake &
       ! infiltration into surface soil layer
       qgtop = gwat - rsur
 
-#if (defined CaMa_Flood)
+#if (defined CaMa_Flood) || (defined GridRiverLakeFlow)
       IF (LWINFILT) THEN
          !  re-infiltration [mm/s] calculation.
-         ! IF surface runoff is occurred (rsur != 0.), flood depth <1.e-6  and flood fraction <0.05,
-         ! the re-infiltration will not be calculated.
-         IF ((flddepth .gt. 1.e-6).and.(fldfrc .gt. 0.05) .and. (patchtype == 0) ) THEN
+         ! flddepth is the flood credit published by CaMa over the inundated part of the patch.
+         IF (patchtype == 0 .and. flddepth > 0._r8 .and. fldfrc > EPSILON(1._r8)) THEN
             gfld=flddepth/deltim ! [mm/s]
+            rsubst_fld = rsubst
             ! surface runoff from inundation, this should not be added to the surface runoff from soil
             ! otherwise, the surface runoff will be double counted.
             ! only the re-infiltration is added to water balance calculation.
@@ -925,20 +974,28 @@ IF((patchtype<=1) .or. is_dry_lake &
             ELSEIF (DEF_Runoff_SCHEME  == 1) THEN
                wliq_soisno_tmp(:) = 0
                CALL Runoff_VIC(deltim, porsl, theta_r, hksati, bsw, &
-                               wice_soisno(1:nl_soil), wliq_soisno(1:nl_soil), fevpg(ipatch), rootflux, gfld, &
+                               wice_soisno(1:nl_soil), wliq_soisno(1:nl_soil), fevpg_runoff, rootflux, gfld, &
                                vic_b_infilt(ipatch), vic_Dsmax(ipatch), vic_Ds(ipatch), vic_Ws(ipatch), vic_c(ipatch),&
-                               rsur_fld, rsubst, wliq_soisno_tmp(1:nl_soil))
+                               rsur_fld, rsubst_fld, wliq_soisno_tmp(1:nl_soil))
             ELSEIF (DEF_Runoff_SCHEME  == 2) THEN
                CALL Runoff_XinAnJiang (&
                   nl_soil, dz_soisno(1:nl_soil), eff_porosity(1:nl_soil), vol_liq(1:nl_soil), &
-                  elvstd, gfld, deltim, rsur_fld, rsubst)
+                  elvstd, gfld, deltim, rsur_fld, rsubst_fld)
             ELSEIF (DEF_Runoff_SCHEME  == 3) THEN
                CALL Runoff_SimpleVIC (&
                   nl_soil, dz_soisno(1:nl_soil), eff_porosity(1:nl_soil), vol_liq(1:nl_soil), &
-                  BVIC, gfld, deltim, rsur_fld, rsubst)
+                  BVIC, gfld, deltim, rsur_fld, rsubst_fld)
             ENDIF
             ! infiltration into surface soil layer
             qinfl_fld_subgrid = gfld - rsur_fld !assume the re-infiltration is occurred in whole patch area.
+            qinfl_fld_subgrid = MIN(gfld,MAX(0._r8,qinfl_fld_subgrid))
+#ifdef GridRiverLakeFlow
+            IF (DEF_GridRiverLake_FloodInfiltMax >= 0._r8 .and. &
+                qinfl_fld_subgrid > DEF_GridRiverLake_FloodInfiltMax/86400._r8) THEN
+               qinfl_fld_subgrid = DEF_GridRiverLake_FloodInfiltMax/86400._r8
+               rsur_fld = gfld - qinfl_fld_subgrid
+            ENDIF
+#endif
          ELSE
             qinfl_fld_subgrid=0.0d0
             gfld=0.0d0
@@ -948,7 +1005,7 @@ IF((patchtype<=1) .or. is_dry_lake &
          qinfl_fld=qinfl_fld_subgrid*fldfrc ! [mm/s] re-infiltration in grid.
          !qinfl=qinfl_fld+qinfl ! [mm/s] total infiltration in grid.
          qgtop=qinfl_fld+qgtop ! [mm/s] total infiltration in grid.
-         flddepth=flddepth-deltim*qinfl_fld_subgrid ! renew flood depth [mm], the flood depth is reduced by re-infiltration but only in inundation area.
+         flddepth=MAX(0._r8,flddepth-deltim*qinfl_fld_subgrid) ! renew flood depth [mm], the flood depth is reduced by re-infiltration but only in inundation area.
       ENDIF
 #endif
 !=======================================================================
@@ -1153,7 +1210,7 @@ ELSE
       err_solver = err_solver-(qsdew_soil+qfros_soil-qsubl_soil)*deltim
 ENDIF
 
-#if (defined CaMa_Flood)
+#if (defined CaMa_Flood) || (defined GridRiverLakeFlow)
       IF (LWINFILT) THEN
          err_solver = err_solver-(gfld-rsur_fld)*fldfrc*deltim
       ENDIF
