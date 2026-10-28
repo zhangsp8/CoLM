@@ -1406,7 +1406,7 @@ ENDIF
 
 
 !-----------------------------------------------------------------------
-   SUBROUTINE SnowWater_snicar (lb,deltim,ssi,wimp, &
+   SUBROUTINE snowwater_snicar (lb,deltim,ssi,wimp, &
                         pg_rain,qseva,qsdew,qsubl,qfros, &
                         dz_soisno,wice_soisno,wliq_soisno,qout_snowb, &
 
@@ -1851,7 +1851,7 @@ ENDIF
 #endif
 ! Aerosol Fluxes (Jan. 7, 2023)
 
-   END SUBROUTINE SnowWater_snicar
+   END SUBROUTINE snowwater_snicar
 
 
    SUBROUTINE soilwater(patchtype,nl_soil,deltim,wimp,smpmin,&
