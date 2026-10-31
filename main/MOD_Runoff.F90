@@ -499,10 +499,14 @@ CONTAINS
       fracice_rsub = max(0.,exp(-3.*(1.-(icefracsum/dzsum)))-exp(-3.))/(1.0-exp(-3.))
       imped = max(0.,1.-fracice_rsub)
 
-      IF (ep_rcc == 0) THEN
-         rsubst = imped * qmax_rcc * exp(- df_rcc * ths_rcc * zwt)
+      IF (qmax_rcc > 0.) THEN
+         IF (ep_rcc == 0) THEN
+            rsubst = imped * qmax_rcc * exp(- df_rcc * ths_rcc * zwt)
+         ELSE
+            rsubst = imped * (max(-df_rcc * ths_rcc * zwt * ep_rcc + qmax_rcc**ep_rcc, 0.))**(1./ep_rcc)
+         ENDIF
       ELSE
-         rsubst = imped * (max(-df_rcc * ths_rcc * zwt * ep_rcc + qmax_rcc**ep_rcc, 0.))**(1./ep_rcc)
+         rsubst = imped * 5.5e-6 * exp(-2.5*zwt)
       ENDIF
 
       rsubst = rsubst * 1.e3  ! m/s to mm/s
