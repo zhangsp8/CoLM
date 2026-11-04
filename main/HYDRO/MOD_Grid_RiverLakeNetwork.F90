@@ -207,6 +207,7 @@ CONTAINS
    integer  :: iloc, i, j, ithis
    real(r8) :: sumwt
    logical  :: is_new
+   logical  :: fexists
 
 
 #ifdef USEMPI
@@ -217,6 +218,12 @@ CONTAINS
       IF (p_is_master) THEN
 
          parafile = get_unitcatchment_file ()
+
+         inquire (file=trim(parafile), exist=fexists)
+         IF (.not. fexists) THEN
+            write(*,*) 'Grid_RiverLakeNetwork file', trim(parafile), ' does not exist.'
+            CALL CoLM_stop ()
+         ENDIF
 
          CALL ncio_read_serial (parafile, 'seq_x', x_ucat)
          CALL ncio_read_serial (parafile, 'seq_y', y_ucat)

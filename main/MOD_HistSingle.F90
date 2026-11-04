@@ -244,8 +244,7 @@ CONTAINS
    SUBROUTINE single_write_3d ( &
          acc_vec, file_hist, varname, itime_in_file, dim1name, ndim1, longname, units)
 
-      USE MOD_Vars_1DAccFluxes, only: nac
-      USE MOD_Vars_Global,      only: spval
+      USE MOD_Vars_Global, only: spval
       IMPLICIT NONE
 
       real(r8),         intent(inout) :: acc_vec(:,:)
@@ -256,8 +255,6 @@ CONTAINS
       integer,          intent(in)    :: ndim1
       character(len=*), intent(in)    :: longname
       character(len=*), intent(in)    :: units
-
-      WHERE (acc_vec /= spval)  acc_vec = acc_vec / nac
 
       IF (USE_SITE_HistWriteBack) THEN
 

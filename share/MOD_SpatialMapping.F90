@@ -683,6 +683,19 @@ CONTAINS
                swgt(iset) = 0.0
             ENDIF
 
+            IF ((this%grid%yblk(ys(iset)) <= 0) .and. (this%grid%yblk(yn(iset)) > 0)) THEN
+               ys(iset) = yn(iset); nwgt(iset) = 1.0; swgt(iset) = 0.0
+            ENDIF
+            IF ((this%grid%yblk(ys(iset)) > 0) .and. (this%grid%yblk(yn(iset)) <= 0)) THEN
+               yn(iset) = ys(iset); nwgt(iset) = 0.0; swgt(iset) = 1.0
+            ENDIF
+            IF ((this%grid%yblk(ys(iset)) <= 0) .and. (this%grid%yblk(yn(iset)) <= 0)) THEN
+               IF (p_is_master) THEN
+                  CALL CoLM_stop ('Bilinear interpolation STOP: ' &
+                     // 'Grid does not cover latitude range of modeling region.')
+               ENDIF
+            ENDIF
+
 
             lon = rlon_pset(iset)*180.0/pi
             CALL normalize_longitude (lon)
@@ -731,6 +744,20 @@ CONTAINS
                wwgt(iset) = 1.0
                ewgt(iset) = 0.0
             ENDIF
+
+            IF ((this%grid%xblk(xw(iset)) <= 0) .and. (this%grid%xblk(xe(iset)) > 0)) THEN
+               xw(iset) = xe(iset); wwgt(iset) = 0.0; ewgt(iset) = 1.0
+            ENDIF
+            IF ((this%grid%xblk(xw(iset)) > 0) .and. (this%grid%xblk(xe(iset)) <= 0)) THEN
+               xe(iset) = xw(iset); wwgt(iset) = 1.0; ewgt(iset) = 0.0
+            ENDIF
+            IF ((this%grid%xblk(xw(iset)) <= 0) .and. (this%grid%xblk(xe(iset)) <= 0)) THEN
+               IF (p_is_master) THEN
+                  CALL CoLM_stop ('Bilinear interpolation STOP: ' &
+                     // 'Grid does not cover longitude range of modeling region.')
+               ENDIF
+            ENDIF
+
 
             CALL insert_into_sorted_list2 ( xw(iset), yn(iset), nglist, xlist, ylist, iloc)
             CALL insert_into_sorted_list2 ( xe(iset), yn(iset), nglist, xlist, ylist, iloc)
@@ -1102,7 +1129,7 @@ CONTAINS
    END SUBROUTINE spatial_mapping_set_missing_value
 
    !-----------------------------------------------------
-   SUBROUTINE spatial_mapping_pset2grid_2d (this, pdata, gdata, spv, msk, input_mode)
+   SUBROUTINE spatial_mapping_pset2grid_2d (this, pdata, gdata, spv, msk, average_mode)
 
    USE MOD_Precision
    USE MOD_Grid
@@ -1118,7 +1145,7 @@ CONTAINS
    real(r8), intent(in), optional :: spv
    logical,  intent(in), optional :: msk(:)
 
-   character(len=*), intent(in), optional :: input_mode
+   character(len=*), intent(in), optional :: average_mode
 
    ! Local variables
    integer :: iproc, idest, isrc
@@ -1126,13 +1153,13 @@ CONTAINS
 
    real(r8), allocatable :: gbuff(:)
    type(pointer_real8_1d), allocatable :: pbuff(:)
-   character(len=256) :: inmode
+   character(len=256) :: avemode
    real(r8) :: sumwt
 
       IF (p_is_worker) THEN
 
-         inmode = 'average'
-         IF (present(input_mode)) inmode = trim(input_mode)
+         avemode = 'average'
+         IF (present(average_mode)) avemode = trim(average_mode)
 
          allocate (pbuff (0:p_np_io-1))
 
@@ -1158,7 +1185,7 @@ CONTAINS
                IF (.not. msk(iset)) CYCLE
             ENDIF
 
-            IF ((this%npart(iset) > 0) .and. (trim(inmode) == 'total')) THEN
+            IF ((this%npart(iset) > 0) .and. (trim(avemode) == 'total')) THEN
                sumwt = sum(this%areapart(iset)%val)
             ELSE
                sumwt = 1.

@@ -83,7 +83,7 @@ CONTAINS
 
    SUBROUTINE aggregate_to_vector_and_write_2d ( &
          acc_vec_patch, file_hist, varname, itime_in_file, filter, &
-         longname, units, input_mode)
+         longname, units, average_mode)
 
    USE MOD_Precision
    USE MOD_SPMD_Task
@@ -101,7 +101,7 @@ CONTAINS
    character(len=*), intent(in) :: longname
    character(len=*), intent(in) :: units
 
-   character(len=*), intent(in), optional :: input_mode
+   character(len=*), intent(in), optional :: average_mode
 
    ! Local variables
    integer :: numset, totalnumset, iset, istt, iend, iwork, mesg(2), isrc, ndata, compress
@@ -109,7 +109,7 @@ CONTAINS
    real(r8), allocatable :: frac(:)
    real(r8), allocatable :: acc_vec(:), rcache(:)
    real(r8) :: sumwt
-   character(len=256) :: inmode
+   character(len=256) :: avemode
 
 #ifdef USEMPI
       CALL mpi_barrier (p_comm_glb, p_err)
@@ -122,8 +122,8 @@ CONTAINS
          numset = numelm
 #endif
 
-         inmode = 'average'
-         IF (present(input_mode)) inmode = trim(input_mode)
+         avemode = 'average'
+         IF (present(average_mode)) avemode = trim(average_mode)
 
          IF (numset > 0) THEN
 
@@ -144,7 +144,7 @@ CONTAINS
                   allocate (frac(istt:iend))
                   mask = (acc_vec_patch(istt:iend) /= spval) .and. filter(istt:iend)
                   IF (any(mask)) THEN
-                     IF (trim(inmode) == 'average') THEN
+                     IF (trim(avemode) == 'average') THEN
 #ifdef CATCHMENT
                         frac = hru_patch%subfrc(istt:iend)
 #else
@@ -260,7 +260,6 @@ CONTAINS
    USE MOD_SPMD_Task
    USE MOD_Namelist
    USE MOD_LandPatch
-   USE MOD_Vars_1DAccFluxes,  only: nac
    USE MOD_Vars_Global, only: spval
    IMPLICIT NONE
 
@@ -325,7 +324,7 @@ CONTAINS
 #endif
                         sumwt = sum(frac, mask = mask)
                         acc_vec(i1,iset) = sum(frac * acc_vec_patch(i1,istt:iend), mask = mask)
-                        acc_vec(i1,iset) = acc_vec(i1,iset) / sumwt / nac
+                        acc_vec(i1,iset) = acc_vec(i1,iset) / sumwt
                      ENDIF
                   ENDDO
                   deallocate(mask)
@@ -621,7 +620,7 @@ CONTAINS
 
    SUBROUTINE aggregate_to_vector_and_write_urb_2d ( &
          acc_vec_patch, file_hist, varname, itime_in_file, filter, &
-         longname, units, input_mode)
+         longname, units, average_mode)
 
    USE MOD_Precision
    USE MOD_SPMD_Task
@@ -640,7 +639,7 @@ CONTAINS
    character(len=*), intent(in) :: longname
    character(len=*), intent(in) :: units
 
-   character(len=*), intent(in), optional :: input_mode
+   character(len=*), intent(in), optional :: average_mode
 
    ! Local variables
    integer :: u, ipth, urb_s, urb_e, numpth
@@ -650,7 +649,7 @@ CONTAINS
    real(r8), allocatable :: frac(:)
    real(r8), allocatable :: acc_vec(:), rcache(:)
    real(r8) :: sumwt
-   character(len=256) :: inmode
+   character(len=256) :: avemode
 
 #ifdef USEMPI
       CALL mpi_barrier (p_comm_glb, p_err)
@@ -663,8 +662,8 @@ CONTAINS
          numset = numelm
 #endif
 
-         inmode = 'average'
-         IF (present(input_mode)) inmode = trim(input_mode)
+         avemode = 'average'
+         IF (present(average_mode)) avemode = trim(average_mode)
 
          IF (numset > 0) THEN
 
@@ -688,7 +687,7 @@ CONTAINS
                   allocate (frac(urb_s:urb_e))
                   mask = (acc_vec_patch(urb_s:urb_e) /= spval) .and. filter(urb_s:urb_e)
                   IF (any(mask)) THEN
-                     IF (trim(inmode) == 'average') THEN
+                     IF (trim(avemode) == 'average') THEN
 #ifdef CATCHMENT
                         frac = hru_patch%subfrc(urban2patch(urb_s:urb_e))
 #else

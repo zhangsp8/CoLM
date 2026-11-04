@@ -114,7 +114,7 @@ CONTAINS
 
    SUBROUTINE flux_map_and_write_2d ( &
          acc_vec, file_hist, varname, itime_in_file, sumarea, filter, &
-         longname, units, input_mode)
+         longname, units, average_mode)
 
    USE MOD_Block
    USE MOD_Vars_Global, only: spval
@@ -129,7 +129,7 @@ CONTAINS
 
    type(block_data_real8_2d), intent(in) :: sumarea
    logical, intent(in) :: filter(:)
-   character(len=*), intent(in), optional :: input_mode
+   character(len=*), intent(in), optional :: average_mode
 
    ! Local variables
    type(block_data_real8_2d) :: flux_xy_2d
@@ -138,8 +138,8 @@ CONTAINS
 
       IF (p_is_io)      CALL allocate_block_data (ghist, flux_xy_2d)
 
-      IF (present(input_mode)) THEN
-         CALL mp2g_hist%pset2grid (acc_vec, flux_xy_2d, spv = spval, msk = filter, input_mode = input_mode)
+      IF (present(average_mode)) THEN
+         CALL mp2g_hist%pset2grid (acc_vec, flux_xy_2d, spv = spval, msk = filter, average_mode = average_mode)
       ELSE
          CALL mp2g_hist%pset2grid (acc_vec, flux_xy_2d, spv = spval, msk = filter)
       ENDIF
@@ -238,7 +238,6 @@ CONTAINS
          longname, units)
 
    USE MOD_Block
-   USE MOD_Vars_1DAccFluxes,  only: nac
    USE MOD_Vars_Global, only: spval
    IMPLICIT NONE
 
@@ -259,9 +258,6 @@ CONTAINS
    integer :: iblkme, xblk, yblk, xloc, yloc, i1
    integer :: compress
 
-      IF (p_is_worker)  THEN
-         WHERE (acc_vec /= spval)  acc_vec = acc_vec / nac
-      ENDIF
       IF (p_is_io) THEN
          CALL allocate_block_data (ghist, flux_xy_3d, ndim1, lb1)
       ENDIF
