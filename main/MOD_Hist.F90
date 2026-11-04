@@ -5245,12 +5245,12 @@ ENDIF
          CALL write_history_variable_2d ( DEF_hist_vars%discharge, a_discharge_pch,     &
             file_hist, 'f_discharge', itime_in_file, sumarea_one, filter_ucat,          &
             'regridded discharge in river and flood plain', 'm^3/s',                    &
-            nac_one, input_mode = 'total')
+            nac_one, average_mode = 'total')
 
          CALL write_history_variable_2d ( DEF_hist_vars%discharge, a_dis_rmth_pch,      &
             file_hist, 'f_discharge_rivermouth_regrid', itime_in_file, sumarea_one,     &
             filter_ucat, 'regridded river mouth discharge into ocean', 'm^3/s',         &
-            nac_one, input_mode = 'total')
+            nac_one, average_mode = 'total')
 
          CALL write_history_variable_2d ( DEF_hist_vars%floodfrc, a_floodfrc_pch,       &
             file_hist, 'f_floodfrc', itime_in_file, sumarea_inpm, filter_inpm,          &
