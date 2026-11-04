@@ -609,9 +609,10 @@ CONTAINS
 
 #ifdef DataAssimilation
          IF (DEF_DA_TWS_GRACE) THEN
+            IF (p_is_worker .and. (numpatch > 0)) vecacc = fslp_k_mon(month, :)
             ! slope factors for runoff [-]
             CALL write_history_variable_2d(.true., &
-               fslp_k_mon(month, :), file_hist, 'f_slope_factor_k', itime_in_file, sumarea, filter, &
+               vecacc, file_hist, 'f_slope_factor_k', itime_in_file, sumarea, filter, &
                'slope factor [k] for runoff', '-', is_inst=.true.)
          ENDIF
 #endif
