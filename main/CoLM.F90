@@ -340,7 +340,7 @@ PROGRAM CoLM
       CALL allocate_2D_Forcing (gforc)
 
       ! Initialize history data module
-      CALL hist_init (dir_hist)
+      CALL hist_init (dir_hist, lc_year)
       CALL allocate_1D_Fluxes ()
 
       CALL CheckEqb_init (n_spinupcycle, lc_year)
@@ -545,7 +545,7 @@ PROGRAM CoLM
             CALL allocate_1D_Forcing
             CALL forcing_init (dir_forcing, deltim, itstamp, jdate(1), lulcc_call=.true.)
 
-            CALL hist_init (dir_hist, lulcc_call=.true.)
+            CALL hist_init (dir_hist, lc_year, lulcc_call=.true.)
             CALL allocate_1D_Fluxes
          ENDIF
 #endif
